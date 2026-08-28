@@ -1,0 +1,41 @@
+{
+  "name": "@monapay/node",
+  "version": "0.1.0",
+  "description": "SDK Node.js zero-dependency cho MONA Pay",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "examples",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/monapay/monapay-node.git"
+  },
+  "keywords": [
+    "monapay",
+    "vietqr",
+    "virtual-account",
+    "payment",
+    "webhook"
+  ],
+  "license": "MIT"
+}
