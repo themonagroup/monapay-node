@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1 - 2026-09-03
+
+- Thêm `sandbox.transaction` để tạo giao dịch thử mà không cần nối ngân hàng.
+- Cho phép tạo checkout sandbox và cung cấp type TypeScript tương ứng.
+- Xuất bản dựng ESM độc lập thay vì re-export bản CommonJS.
+
 ## 0.5.0
 
 - Thêm `paymentProfile.get/set` và `checkouts.create/get/list/cancel` cho hosted checkout.

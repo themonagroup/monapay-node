@@ -235,7 +235,7 @@ test('checkouts và paymentProfile ánh xạ đủ 6 method, query và idempoten
   await client.paymentProfile.get();
   await client.paymentProfile.set({ display_name: 'Shop MONA', locale: 'vi' });
   await client.checkouts.create(
-    { amount: 250000, order_code: 'DH_10234', return_url: 'https://shop.test/return' },
+    { amount: 250000, order_code: 'DH_10234', return_url: 'https://shop.test/return', sandbox: true },
     { idempotencyKey: 'create-key' },
   );
   await client.checkouts.get('checkout/id');
@@ -250,6 +250,12 @@ test('checkouts và paymentProfile ánh xạ đủ 6 method, query và idempoten
   assert.deepEqual(JSON.parse(apiCalls[1].init.body), { display_name: 'Shop MONA', locale: 'vi' });
   assert.equal(apiCalls[2].url, 'https://example.test/api/v1/checkouts');
   assert.equal(apiCalls[2].init.headers['Idempotency-Key'], 'create-key');
+  assert.deepEqual(JSON.parse(apiCalls[2].init.body), {
+    amount: 250000,
+    order_code: 'DH_10234',
+    return_url: 'https://shop.test/return',
+    sandbox: true,
+  });
   assert.equal(apiCalls[3].url, 'https://example.test/api/v1/checkouts/checkout%2Fid');
   assert.match(apiCalls[4].url, /status=pending/);
   assert.match(apiCalls[4].url, /order_code=DH_10234/);
@@ -260,4 +266,36 @@ test('checkouts và paymentProfile ánh xạ đủ 6 method, query và idempoten
   for (const call of apiCalls.filter(({ init }) => init.method !== 'GET')) {
     assert.equal(call.init.headers['X-Client-Secret'], 'client-secret');
   }
+});
+
+test('sandbox.transaction gửi đúng endpoint và giữ nguyên payload', async () => {
+  const calls = [];
+  const fetch = async (url, init) => {
+    calls.push({ url, init });
+    if (url.endsWith('/api/v1/oauth/token')) {
+      return response({ success: true, data: { access_token: 'token', expires_in: 3600 } });
+    }
+    return response({
+      success: true,
+      data: {
+        transaction_code: 'SANDBOX-1',
+        virtual_account_number: 'SBX0001',
+        account_number: '0000000001',
+        amount: 10000,
+        sandbox: true,
+        is_sandbox: true,
+      },
+    });
+  };
+  const client = new MonaPay({
+    baseUrl: 'https://example.test', clientId: 'client-id', clientSecret: 'client-secret', fetch,
+  });
+  const body = { amount: 10000, description: 'DH10234', virtual_account_number: 'SBX0001' };
+  const result = await client.sandbox.transaction(body);
+
+  assert.equal(calls[1].url, 'https://example.test/api/v1/sandbox/transactions');
+  assert.equal(calls[1].init.method, 'POST');
+  assert.deepEqual(JSON.parse(calls[1].init.body), body);
+  assert.equal(calls[1].init.headers['X-Client-Secret'], 'client-secret');
+  assert.equal(result.transaction_code, 'SANDBOX-1');
 });

@@ -163,6 +163,9 @@ class MonaPay {
         },
       }),
     });
+    this.sandbox = Object.freeze({
+      transaction: (body) => this._request('POST', '/api/v1/sandbox/transactions', { body }),
+    });
     this.webhooks = Object.freeze({
       list: () => this._request('GET', '/api/v1/client-webhooks'),
       create: (body) => this._request('POST', '/api/v1/client-webhooks', { body }),

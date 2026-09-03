@@ -21,17 +21,21 @@ console.log(checkout.checkout_url);
 npm install @monapay/node
 ```
 
-## Tích hợp trong 5 phút
+## Sử dụng
+
+Các sub-client dùng trực tiếp: `me`, `keys`, `bankAccounts`, `virtualAccounts`, `qr`, `transactions`, `webhooks`, `webhookLogs`, `emailConfigs`, `emailLogs`, `checkouts`, `paymentProfile`, `sandbox`.
+
+Khởi tạo từ biến môi trường bằng `MonaPay.fromEnv()` hoặc truyền credentials tường minh:
 
 ```js
 import { MonaPay, verifyWebhook } from '@monapay/node';
 
-const mona = new MonaPay({
+const mona = MonaPay.fromEnv();
+
+const monaExplicit = new MonaPay({
   clientId: process.env.MONAPAY_CLIENT_ID,
   clientSecret: process.env.MONAPAY_CLIENT_SECRET,
 });
-
-// Hoặc: const mona = MonaPay.fromEnv();
 
 // 1. Lệnh đầu tiên tự lấy OAuth token; các lệnh sau dùng lại token tới gần hạn.
 console.log(await mona.me());
@@ -63,6 +67,23 @@ console.log(qr.qr_data_url);
 ```
 
 `MonaPay.fromEnv()` ưu tiên `MONAPAY_CLIENT_ID` + `MONAPAY_CLIENT_SECRET`. Cách cũ `MONAPAY_USERNAME` + `MONAPAY_PASSWORD` vẫn được hỗ trợ, nhưng tài khoản bật 2FA không login bằng mật khẩu được. SDK cache token theo `expires_in` (làm mới sớm 60 giây) và thử lại request đúng một lần nếu gặp HTTP 401. Các method trả trực tiếp trường `data` của response. Lỗi ném `MonaPayError`, có `status` và `body` để log.
+
+## Thử bằng sandbox (không cần nối ngân hàng)
+
+```js
+const checkout = await mona.checkouts.create({
+  amount: 10000, order_code: 'DH10234',
+  return_url: 'https://shop.vn/payment/return', sandbox: true,
+});
+await mona.sandbox.transaction({
+  virtual_account_number: checkout.bank.account_number,
+  amount: checkout.amount, description: checkout.order_code,
+});
+const paid = await mona.checkouts.get(checkout.id);
+console.log(paid.status); // "paid"
+```
+
+Webhook `CHECKOUT_PAID` có trường `checkout_id`, không phải `id`; ví dụ: `await fulfill(event.checkout_id)`.
 
 ## Nối ngân hàng bằng OTP (4 bước)
 
@@ -136,15 +157,18 @@ console.log(await mona.emailLogs.list({ configId: config.id, status: 'sent' }));
 
 ## Các nhóm method
 
-- `me()`; `keys.generate/list/destroy`; `bankAccounts.list`.
-- `registerVirtualAccount/verifyVirtualAccount/registerNotification/verifyNotification/notificationDetail` (cũng có qua nhóm `va`).
-- `va.list`.
-- `paymentProfile.get/set`; `checkouts.create/get/list/cancel`.
-- `qr.generate/cancel`.
-- `transactions.list`, async generator `transactions.iterate`, `transactions.retry`.
-- `webhooks.list/create/update/remove/test`; `webhookLogs.list/stats`.
-- `emailConfigs.list/get/create/update/remove/verify/resendVerification/test`.
-- `emailLogs.list/stats`; `emailSuppressions.list/remove`.
+| Sub-client | Method |
+| --- | --- |
+| `keys`, `bankAccounts` | `generate/list/destroy`, `list` |
+| `va` | `register/verify/registerNotification/verifyNotification/notificationDetail/list` |
+| `paymentProfile`, `checkouts` | `get/set`, `create/get/list/cancel` |
+| `qr` | `generate/cancel` |
+| `transactions` | `list/iterate/retry` |
+| `sandbox` | `transaction` |
+| `webhooks`, `webhookLogs` | `list/create/update/remove/test`, `list/stats` |
+| `emailConfigs`, `emailLogs`, `emailSuppressions` | `list/get/create/update/remove/verify/resendVerification/test`, `list/stats`, `list/remove` |
+
+Các hàm tiện ích `me()` và `registerVirtualAccount/verifyVirtualAccount/registerNotification/verifyNotification/notificationDetail` cũng gọi trực tiếp được trên client.
 
 ```js
 for await (const tx of mona.transactions.iterate({

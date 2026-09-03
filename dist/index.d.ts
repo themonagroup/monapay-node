@@ -18,6 +18,21 @@ export interface RetryOptions {
   targetId?: string;
 }
 
+export interface SandboxTransactionOptions {
+  amount: number;
+  description?: string;
+  virtual_account_number?: string;
+}
+
+export interface SandboxTransactionResult {
+  transaction_code: string;
+  virtual_account_number: string | null;
+  account_number: string;
+  amount: number;
+  sandbox: true;
+  is_sandbox: true;
+}
+
 export type EmailEvent = 'TRANSACTION_IN' | 'WEBHOOK_FAILED' | 'VA_CREATED';
 export type EmailLogEvent = EmailEvent | 'VERIFICATION' | 'TEST' | 'RECEIPT';
 
@@ -62,6 +77,7 @@ export interface CheckoutCreateOptions {
   amount: number;
   order_code: string;
   return_url: string;
+  sandbox?: boolean;
   description?: string;
   cancel_url?: string;
   payer_email?: string;
@@ -160,6 +176,9 @@ export class MonaPay {
     list(options: TransactionListOptions): Promise<any>;
     iterate(options: TransactionListOptions): AsyncGenerator<any, void, unknown>;
     retry(id: string, options: RetryOptions): Promise<any>;
+  };
+  sandbox: {
+    transaction(options: SandboxTransactionOptions): Promise<SandboxTransactionResult>;
   };
   webhooks: {
     list(): Promise<any>;
