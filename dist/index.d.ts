@@ -56,6 +56,50 @@ export interface DateRangeOptions {
   toDate?: string;
 }
 
+export type CheckoutStatus = 'pending' | 'paid' | 'expired' | 'cancelled';
+
+export interface CheckoutCreateOptions {
+  amount: number;
+  order_code: string;
+  return_url: string;
+  description?: string;
+  cancel_url?: string;
+  payer_email?: string;
+  payer_name?: string;
+  expires_in?: number;
+  metadata?: Record<string, unknown>;
+  virtual_account_id?: string;
+}
+
+export interface CheckoutListOptions {
+  status?: CheckoutStatus;
+  orderCode?: string;
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface IdempotencyOptions { idempotencyKey?: string }
+
+export interface PaymentProfileOptions {
+  display_name?: string;
+  logo_url?: string | null;
+  hotline?: string | null;
+  support_email?: string | null;
+  default_bank_account_id?: string;
+  default_virtual_account_id?: string | null;
+  va_prefix?: string;
+  owner_number?: string;
+  owner_type?: 'PER' | 'ORG';
+  merchant_id?: string;
+  terminal_id?: string;
+  beneficiary_name?: string;
+  accent_color?: string | null;
+  locale?: 'vi' | 'en';
+  show_mona_badge?: boolean;
+}
+
 export interface WebhookVerifyOptions {
   rawBody: string | Uint8Array;
   headers: Headers | Record<string, string | string[] | undefined>;
@@ -98,6 +142,16 @@ export class MonaPay {
     list(bankAccountId: string): Promise<any>;
   };
   bankAccounts: { list(): Promise<any> };
+  paymentProfile: {
+    get(): Promise<any>;
+    set(body: PaymentProfileOptions): Promise<any>;
+  };
+  checkouts: {
+    create(body: CheckoutCreateOptions, options?: IdempotencyOptions): Promise<any>;
+    get(id: string): Promise<any>;
+    list(options?: CheckoutListOptions): Promise<any>;
+    cancel(id: string, options?: IdempotencyOptions): Promise<any>;
+  };
   qr: {
     generate(body: Record<string, unknown>): Promise<any>;
     cancel(id: string, body?: Record<string, unknown>): Promise<any>;

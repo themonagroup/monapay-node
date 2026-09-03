@@ -1,6 +1,6 @@
 'use strict';
 
-const { createHmac, timingSafeEqual } = require('node:crypto');
+const { createHmac, randomUUID, timingSafeEqual } = require('node:crypto');
 
 const DEFAULT_BASE_URL = 'https://api.monapay.vn';
 
@@ -132,6 +132,22 @@ class MonaPay {
     });
     this.bankAccounts = Object.freeze({
       list: () => this._request('GET', '/api/v1/client/bank-accounts'),
+    });
+    this.paymentProfile = Object.freeze({
+      get: () => this._request('GET', '/api/v1/payment-profile'),
+      set: (body) => this._request('PUT', '/api/v1/payment-profile', { body }),
+    });
+    this.checkouts = Object.freeze({
+      create: (body, options = {}) => this._request('POST', '/api/v1/checkouts', {
+        body,
+        headers: { 'Idempotency-Key': options.idempotencyKey || randomUUID() },
+      }),
+      get: (id) => this._request('GET', `/api/v1/checkouts/${segment(id)}`),
+      list: (options = {}) => this._request('GET', '/api/v1/checkouts', { query: checkoutQuery(options) }),
+      cancel: (id, options = {}) => this._request('POST', `/api/v1/checkouts/${segment(id)}/cancel`, {
+        body: {},
+        headers: { 'Idempotency-Key': options.idempotencyKey || randomUUID() },
+      }),
     });
     this.qr = Object.freeze({
       generate: (body) => this._request('POST', '/api/v1/acb/qr-payment/generate', { body }),
@@ -268,7 +284,7 @@ class MonaPay {
     for (const [key, value] of Object.entries(options.query || {})) {
       if (value != null) url.searchParams.set(key, String(value));
     }
-    const headers = { Accept: 'application/json' };
+    const headers = { Accept: 'application/json', ...(options.headers || {}) };
     if (options.authenticated) headers.Authorization = `Bearer ${this._token}`;
     if (method !== 'GET' && options.authenticated && this.clientSecret) headers['X-Client-Secret'] = this.clientSecret;
     let body;
@@ -344,6 +360,17 @@ function emailLogQuery(options) {
 
 function emailStatsQuery(options) {
   return { from_date: options.fromDate, to_date: options.toDate };
+}
+
+function checkoutQuery(options) {
+  return {
+    status: options.status,
+    order_code: options.orderCode,
+    from_date: options.fromDate,
+    to_date: options.toDate,
+    page: options.page,
+    limit: options.limit,
+  };
 }
 
 module.exports = { MonaPay, MonaPayError, verifyWebhook, expressWebhook };

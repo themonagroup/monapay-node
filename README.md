@@ -4,6 +4,17 @@ MONA Pay là cổng thanh toán và API ngân hàng của The MONA Group, giúp 
 
 SDK Node.js/TypeScript zero-dependency, dùng `fetch` built-in của Node.js 18 trở lên. MONA Pay miễn phí hoàn toàn.
 
+## Tạo link thu tiền
+
+```js
+import { MonaPay } from '@monapay/node';
+const mona = MonaPay.fromEnv();
+const checkout = await mona.checkouts.create({
+  amount: 250000, order_code: 'DH10234', return_url: 'https://shop.vn/payment/return',
+});
+console.log(checkout.checkout_url);
+```
+
 ## Cài đặt
 
 ```bash
@@ -128,6 +139,7 @@ console.log(await mona.emailLogs.list({ configId: config.id, status: 'sent' }));
 - `me()`; `keys.generate/list/destroy`; `bankAccounts.list`.
 - `registerVirtualAccount/verifyVirtualAccount/registerNotification/verifyNotification/notificationDetail` (cũng có qua nhóm `va`).
 - `va.list`.
+- `paymentProfile.get/set`; `checkouts.create/get/list/cancel`.
 - `qr.generate/cancel`.
 - `transactions.list`, async generator `transactions.iterate`, `transactions.retry`.
 - `webhooks.list/create/update/remove/test`; `webhookLogs.list/stats`.

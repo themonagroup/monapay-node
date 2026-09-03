@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- Thêm `paymentProfile.get/set` và `checkouts.create/get/list/cancel` cho hosted checkout.
+- Tự sinh `Idempotency-Key` cho thao tác tạo và huỷ checkout, cho phép truyền key riêng.
+
 ## 0.4.0 - 2026-09-03
 
 - Thêm `emailConfigs`, `emailLogs`, `emailSuppressions` và type declarations cho toàn bộ Email API.

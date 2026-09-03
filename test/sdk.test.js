@@ -219,3 +219,45 @@ test('email resources ánh xạ đủ config, log, stats và suppression', async
     assert.equal(call.init.headers['X-Client-Secret'], 'client-secret');
   }
 });
+
+test('checkouts và paymentProfile ánh xạ đủ 6 method, query và idempotency', async () => {
+  const calls = [];
+  const fetch = async (url, init) => {
+    calls.push({ url, init });
+    if (url.endsWith('/api/v1/oauth/token')) {
+      return response({ success: true, data: { access_token: 'token', expires_in: 3600 } });
+    }
+    return response({ success: true, data: { ok: true } });
+  };
+  const client = new MonaPay({
+    baseUrl: 'https://example.test', clientId: 'client-id', clientSecret: 'client-secret', fetch,
+  });
+  await client.paymentProfile.get();
+  await client.paymentProfile.set({ display_name: 'Shop MONA', locale: 'vi' });
+  await client.checkouts.create(
+    { amount: 250000, order_code: 'DH_10234', return_url: 'https://shop.test/return' },
+    { idempotencyKey: 'create-key' },
+  );
+  await client.checkouts.get('checkout/id');
+  await client.checkouts.list({ status: 'pending', orderCode: 'DH_10234', fromDate: '2026-09-01', page: 2, limit: 50 });
+  await client.checkouts.cancel('checkout/id', { idempotencyKey: 'cancel-key' });
+
+  const apiCalls = calls.slice(1);
+  assert.equal(apiCalls.length, 6);
+  assert.equal(apiCalls[0].url, 'https://example.test/api/v1/payment-profile');
+  assert.equal(apiCalls[0].init.method, 'GET');
+  assert.equal(apiCalls[1].init.method, 'PUT');
+  assert.deepEqual(JSON.parse(apiCalls[1].init.body), { display_name: 'Shop MONA', locale: 'vi' });
+  assert.equal(apiCalls[2].url, 'https://example.test/api/v1/checkouts');
+  assert.equal(apiCalls[2].init.headers['Idempotency-Key'], 'create-key');
+  assert.equal(apiCalls[3].url, 'https://example.test/api/v1/checkouts/checkout%2Fid');
+  assert.match(apiCalls[4].url, /status=pending/);
+  assert.match(apiCalls[4].url, /order_code=DH_10234/);
+  assert.match(apiCalls[4].url, /limit=50/);
+  assert.equal(apiCalls[5].url, 'https://example.test/api/v1/checkouts/checkout%2Fid/cancel');
+  assert.equal(apiCalls[5].init.headers['Idempotency-Key'], 'cancel-key');
+  assert.deepEqual(JSON.parse(apiCalls[5].init.body), {});
+  for (const call of apiCalls.filter(({ init }) => init.method !== 'GET')) {
+    assert.equal(call.init.headers['X-Client-Secret'], 'client-secret');
+  }
+});
