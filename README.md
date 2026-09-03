@@ -1,6 +1,6 @@
 # @monapay/node
 
-MONA Pay là cổng thanh toán và API ngân hàng của The MONA Group, giúp doanh nghiệp Việt Nam nhận và xác nhận tiền chuyển khoản theo thời gian thực qua tài khoản ảo (VA), VietQR, webhook và Telegram — thiết kế để cả lập trình viên lẫn AI agent tích hợp trong vài phút.
+MONA Pay là cổng thanh toán và API ngân hàng của The MONA Group, giúp doanh nghiệp Việt Nam nhận và xác nhận tiền chuyển khoản theo thời gian thực qua tài khoản ảo (VA), VietQR, webhook, Telegram và email, thiết kế để cả lập trình viên lẫn AI agent tích hợp trong vài phút.
 
 SDK Node.js/TypeScript zero-dependency, dùng `fetch` built-in của Node.js 18 trở lên. MONA Pay miễn phí hoàn toàn.
 
@@ -108,6 +108,21 @@ app.post('/webhooks/monapay', express.raw({ type: 'application/json' }),
 
 Ví dụ Next.js App Router đầy đủ ở `examples/nextjs-route.js`. Nên lưu `transaction_code` bằng unique constraint để chống xử lý trùng khi gửi lại.
 
+## Thông báo qua email
+
+MONA Pay gửi mã 6 số tới từng địa chỉ mới. Ứng dụng phải hỏi người dùng mã trong hộp thư rồi xác minh, không tự đoán mã.
+
+```js
+const config = await mona.emailConfigs.create({ name: 'Kế toán', recipients: ['kt@shop.vn'] });
+const email = config.pending_verification[0];
+const code = await askUserForCode(email);
+await mona.emailConfigs.verify(config.id, { email, code });
+await mona.emailConfigs.test(config.id);
+console.log(await mona.emailLogs.list({ configId: config.id, status: 'sent' }));
+```
+
+Địa chỉ bounce hoặc khiếu nại nằm trong `emailSuppressions.list()`; chỉ gọi `emailSuppressions.remove(email)` sau khi đã sửa nguyên nhân.
+
 ## Các nhóm method
 
 - `me()`; `keys.generate/list/destroy`; `bankAccounts.list`.
@@ -116,6 +131,8 @@ Ví dụ Next.js App Router đầy đủ ở `examples/nextjs-route.js`. Nên l�
 - `qr.generate/cancel`.
 - `transactions.list`, async generator `transactions.iterate`, `transactions.retry`.
 - `webhooks.list/create/update/remove/test`; `webhookLogs.list/stats`.
+- `emailConfigs.list/get/create/update/remove/verify/resendVerification/test`.
+- `emailLogs.list/stats`; `emailSuppressions.list/remove`.
 
 ```js
 for await (const tx of mona.transactions.iterate({
@@ -136,7 +153,7 @@ Tài liệu: https://monapay.vn/docs · AI/LLM: https://monapay.vn/llms.txt · H
 ## Phát triển
 
 ```bash
-node --test
+npm run build && npm test
 ```
 
 License MIT.

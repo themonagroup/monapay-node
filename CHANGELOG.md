@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 - 2026-09-03
+
+- Thêm `emailConfigs`, `emailLogs`, `emailSuppressions` và type declarations cho toàn bộ Email API.
+- Thêm nguồn chuẩn trong `src/` và lệnh build tái tạo package ESM/CJS.
+
 ## 0.3.0 - 2026-09-03
 
 - Hoàn thiện luồng nối ngân hàng ACB bằng OTP 4 bước và truy vấn trạng thái đăng ký thông báo.

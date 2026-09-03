@@ -1,6 +1,6 @@
 {
   "name": "@monapay/node",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "SDK Node.js zero-dependency cho MONA Pay",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -21,7 +21,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test"
+    "build": "node scripts/build.mjs",
+    "test": "npm run build && node --test"
   },
   "engines": {
     "node": ">=18"
@@ -35,7 +36,8 @@
     "vietqr",
     "virtual-account",
     "payment",
-    "webhook"
+    "webhook",
+    "email"
   ],
   "license": "MIT",
   "homepage": "https://monapay.vn/docs",

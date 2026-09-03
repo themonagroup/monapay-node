@@ -174,3 +174,48 @@ test('va hỗ trợ đủ 5 method cho luồng nối ngân hàng bằng OTP', as
   assert.equal(apiCalls[4].url, 'https://example.test/api/v1/acb/va%2Fid/notification/details');
   assert.equal(apiCalls[4].init.method, 'GET');
 });
+
+test('email resources ánh xạ đủ config, log, stats và suppression', async () => {
+  const calls = [];
+  const fetch = async (url, init) => {
+    calls.push({ url, init });
+    if (url.endsWith('/api/v1/oauth/token')) {
+      return response({ success: true, data: { access_token: 'token', expires_in: 3600 } });
+    }
+    return response({ success: true, data: { ok: true } });
+  };
+  const client = new MonaPay({
+    baseUrl: 'https://example.test', clientId: 'client-id', clientSecret: 'client-secret', fetch,
+  });
+  await client.emailConfigs.list();
+  await client.emailConfigs.get('config/id');
+  await client.emailConfigs.create({ name: 'Kế toán', recipients: ['kt@example.com'], events: ['TRANSACTION_IN'] });
+  await client.emailConfigs.update('config/id', { is_active: true, virtual_account_id: null });
+  await client.emailConfigs.remove('config/id');
+  await client.emailConfigs.verify('config/id', { email: 'kt@example.com', code: '123456' });
+  await client.emailConfigs.resendVerification('config/id', { email: 'kt@example.com' });
+  await client.emailConfigs.test('config/id');
+  await client.emailLogs.list({ configId: 'config/id', status: 'sent', eventType: 'TEST', fromDate: '2026-09-01', page: 2, limit: 100 });
+  await client.emailLogs.stats({ fromDate: '2026-09-01', toDate: '2026-09-03' });
+  await client.emailSuppressions.list();
+  await client.emailSuppressions.remove('bounce+tag@example.com');
+
+  const apiCalls = calls.slice(1);
+  assert.equal(apiCalls.length, 12);
+  assert.equal(apiCalls[0].url, 'https://example.test/api/v1/email-configs');
+  assert.equal(apiCalls[1].url, 'https://example.test/api/v1/email-configs/config%2Fid');
+  assert.deepEqual(JSON.parse(apiCalls[2].init.body), { name: 'Kế toán', recipients: ['kt@example.com'], events: ['TRANSACTION_IN'] });
+  assert.deepEqual(JSON.parse(apiCalls[3].init.body), { is_active: true, virtual_account_id: null });
+  assert.equal(apiCalls[4].init.method, 'DELETE');
+  assert.deepEqual(JSON.parse(apiCalls[5].init.body), { email: 'kt@example.com', code: '123456' });
+  assert.ok(apiCalls[6].url.endsWith('/config%2Fid/resend-verification'));
+  assert.deepEqual(JSON.parse(apiCalls[7].init.body), {});
+  assert.match(apiCalls[8].url, /config_id=config%2Fid/);
+  assert.match(apiCalls[8].url, /event_type=TEST/);
+  assert.match(apiCalls[9].url, /to_date=2026-09-03/);
+  assert.equal(apiCalls[10].url, 'https://example.test/api/v1/email-suppressions');
+  assert.equal(apiCalls[11].url, 'https://example.test/api/v1/email-suppressions/bounce%2Btag%40example.com');
+  for (const call of apiCalls.filter(({ init }) => init.method !== 'GET')) {
+    assert.equal(call.init.headers['X-Client-Secret'], 'client-secret');
+  }
+});
