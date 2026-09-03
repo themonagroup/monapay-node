@@ -16,20 +16,16 @@ npm install @monapay/node
 import { MonaPay, verifyWebhook } from '@monapay/node';
 
 const mona = new MonaPay({
-  username: process.env.MONA_USERNAME,
-  password: process.env.MONA_PASSWORD,
-  clientSecret: process.env.MONA_CLIENT_SECRET, // có thể bỏ ở lần chạy đầu
+  clientId: process.env.MONAPAY_CLIENT_ID,
+  clientSecret: process.env.MONAPAY_CLIENT_SECRET,
 });
 
-// 1. Lệnh đầu tiên tự login; các lệnh sau dùng lại token.
+// Hoặc: const mona = MonaPay.fromEnv();
+
+// 1. Lệnh đầu tiên tự lấy OAuth token; các lệnh sau dùng lại token tới gần hạn.
 console.log(await mona.me());
 
-// 2. Tạo key ở lần chạy đầu. Secret chỉ được API trả về một lần và SDK
-// tự giữ secret này cho các lệnh ghi tiếp theo trong cùng instance.
-const key = await mona.keys.generate('Web ban hang');
-console.log('Lưu MONA_CLIENT_SECRET an toàn:', key.client_secret);
-
-// 3. Đăng ký webhook HMAC.
+// 2. Đăng ký webhook HMAC.
 await mona.webhooks.create({
   name: 'Web ban hang',
   webhook_url: 'https://shop.vn/webhooks/monapay',
@@ -38,14 +34,14 @@ await mona.webhooks.create({
   payload_format: 'application/json',
 });
 
-// 4. Trong route nhận webhook, xác thực đúng raw body trước khi xử lý.
+// 3. Trong route nhận webhook, xác thực đúng raw body trước khi xử lý.
 const verified = verifyWebhook({
   rawBody, headers,
   secret: process.env.MONA_WEBHOOK_SECRET,
 });
 if (!verified.ok) throw new Error(verified.reason);
 
-// 5. Tạo VietQR động.
+// 4. Tạo VietQR động.
 const qr = await mona.qr.generate({
   ownerNumber: '123456789', ownerType: 'ORG',
   merchantId: 'MC00012345', terminalId: 'TM0001', orderId: 'DH10234',
@@ -55,7 +51,31 @@ const qr = await mona.qr.generate({
 console.log(qr.qr_data_url);
 ```
 
-`MonaPay` tự đăng nhập lại và thử lại request đúng một lần nếu token hết hạn (HTTP 401). Các method trả trực tiếp trường `data` của response. Lỗi ném `MonaPayError`, có `status` và `body` để log.
+`MonaPay.fromEnv()` ưu tiên `MONAPAY_CLIENT_ID` + `MONAPAY_CLIENT_SECRET`. Cách cũ `MONAPAY_USERNAME` + `MONAPAY_PASSWORD` vẫn được hỗ trợ, nhưng tài khoản bật 2FA không login bằng mật khẩu được. SDK cache token theo `expires_in` (làm mới sớm 60 giây) và thử lại request đúng một lần nếu gặp HTTP 401. Các method trả trực tiếp trường `data` của response. Lỗi ném `MonaPayError`, có `status` và `body` để log.
+
+## Nối ngân hàng bằng OTP (4 bước)
+
+OTP do ACB gửi về số điện thoại đăng ký của chủ tài khoản. Ứng dụng phải hỏi người dùng ở bước 2 và 4, không tự tạo hoặc lưu OTP.
+
+```js
+const registration = await mona.registerVirtualAccount({
+  customer_type: 'PERS',
+  account_number: 123456789,
+  phone_number: '0901234567',
+  virtual_account_info: {
+    virtual_account_prefix_code: 'LOC',
+    virtual_account_content: 'DH10234',
+    virtual_account_explain: 'Don hang 10234',
+  },
+  user_agreement: true,
+});
+
+const va = await mona.verifyVirtualAccount(registration.acb_request.id, otpNguoiDungNhap);
+const notification = await mona.registerNotification(va.id);
+await mona.verifyNotification(notification.acb_request.id, otpLanHaiNguoiDungNhap);
+
+console.log(await mona.notificationDetail(va.id));
+```
 
 ## Xác thực webhook từ raw body
 
@@ -91,7 +111,8 @@ Ví dụ Next.js App Router đầy đủ ở `examples/nextjs-route.js`. Nên l�
 ## Các nhóm method
 
 - `me()`; `keys.generate/list/destroy`; `bankAccounts.list`.
-- `va.register/verify/registerNotification/verifyNotification/list`.
+- `registerVirtualAccount/verifyVirtualAccount/registerNotification/verifyNotification/notificationDetail` (cũng có qua nhóm `va`).
+- `va.list`.
 - `qr.generate/cancel`.
 - `transactions.list`, async generator `transactions.iterate`, `transactions.retry`.
 - `webhooks.list/create/update/remove/test`; `webhookLogs.list/stats`.

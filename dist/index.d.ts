@@ -1,8 +1,9 @@
 export interface MonaPayOptions {
   baseUrl?: string;
-  username: string;
-  password: string;
+  clientId?: string;
   clientSecret?: string;
+  username?: string;
+  password?: string;
   fetch?: typeof globalThis.fetch;
 }
 
@@ -35,9 +36,16 @@ export class MonaPayError extends Error {
 
 export class MonaPay {
   constructor(options: MonaPayOptions);
+  static fromEnv(env?: Record<string, string | undefined>): MonaPay;
   baseUrl: string;
+  clientId?: string;
   clientSecret?: string;
   me(): Promise<any>;
+  registerVirtualAccount(body: Record<string, unknown>): Promise<any>;
+  verifyVirtualAccount(requestId: string, code: string): Promise<any>;
+  registerNotification(vaId: string, body?: { receive_noti_realtime: boolean; username?: string }): Promise<any>;
+  verifyNotification(requestId: string, code: string): Promise<any>;
+  notificationDetail(vaId: string): Promise<any>;
   keys: {
     generate(name?: string): Promise<any>;
     list(): Promise<any>;
@@ -46,8 +54,9 @@ export class MonaPay {
   va: {
     register(body: Record<string, unknown>): Promise<any>;
     verify(requestId: string, code: string): Promise<any>;
-    registerNotification(vaId: string, body: Record<string, unknown>): Promise<any>;
+    registerNotification(vaId: string, body?: { receive_noti_realtime: boolean; username?: string }): Promise<any>;
     verifyNotification(requestId: string, code: string): Promise<any>;
+    notificationDetail(vaId: string): Promise<any>;
     list(bankAccountId: string): Promise<any>;
   };
   bankAccounts: { list(): Promise<any> };

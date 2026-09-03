@@ -111,9 +111,14 @@ function expressWebhook(secret, handler, options = {}) {
 }
 
 class MonaPay {
-  constructor({ baseUrl = DEFAULT_BASE_URL, username, password, clientSecret, fetch: fetchImpl } = {}) {
-    if (!username || !password) throw new TypeError('username và password là bắt buộc');
+  constructor({ baseUrl = DEFAULT_BASE_URL, clientId, clientSecret, username, password, fetch: fetchImpl } = {}) {
+    const hasClientCredentials = Boolean(clientId && clientSecret);
+    const hasPasswordCredentials = Boolean(username && password);
+    if (!hasClientCredentials && !hasPasswordCredentials) {
+      throw new TypeError('Cần clientId + clientSecret hoặc username + password; nên dùng client_id/client_secret, tài khoản bật 2FA không login bằng mật khẩu được');
+    }
     this.baseUrl = trimBaseUrl(baseUrl);
+    this.clientId = clientId;
     this.username = username;
     this.password = password;
     this.clientSecret = clientSecret;
@@ -122,6 +127,7 @@ class MonaPay {
       throw new TypeError('Môi trường cần fetch built-in (Node.js >=18)');
     }
     this._token = undefined;
+    this._tokenExpiresAt = 0;
     this._loginPromise = undefined;
 
     this.keys = Object.freeze({
@@ -136,8 +142,9 @@ class MonaPay {
     this.va = Object.freeze({
       register: (body) => this._request('POST', '/api/v1/acb/virtual-account/registration', { body }),
       verify: (requestId, code) => this._request('POST', `/api/v1/acb/${segment(requestId)}/virtual-account/verification`, { body: { code } }),
-      registerNotification: (vaId, body) => this._request('POST', `/api/v1/acb/${segment(vaId)}/notification/registration`, { body }),
+      registerNotification: (vaId, body = { receive_noti_realtime: true }) => this._request('POST', `/api/v1/acb/${segment(vaId)}/notification/registration`, { body }),
       verifyNotification: (requestId, code) => this._request('POST', `/api/v1/acb/${segment(requestId)}/notification/verification`, { body: { code } }),
+      notificationDetail: (vaId) => this._request('GET', `/api/v1/acb/${segment(vaId)}/notification/details`),
       list: (bankAccountId) => this._request('GET', `/api/v1/acb/${segment(bankAccountId)}/virtual-account/retrieve`),
     });
     this.bankAccounts = Object.freeze({
@@ -174,15 +181,60 @@ class MonaPay {
     return this._request('GET', '/api/v1/client/me');
   }
 
+  registerVirtualAccount(body) {
+    return this.va.register(body);
+  }
+
+  verifyVirtualAccount(requestId, code) {
+    return this.va.verify(requestId, code);
+  }
+
+  registerNotification(vaId, body) {
+    return this.va.registerNotification(vaId, body);
+  }
+
+  verifyNotification(requestId, code) {
+    return this.va.verifyNotification(requestId, code);
+  }
+
+  notificationDetail(vaId) {
+    return this.va.notificationDetail(vaId);
+  }
+
+  static fromEnv(env = process.env) {
+    const baseUrl = env.MONAPAY_BASE_URL || DEFAULT_BASE_URL;
+    if (env.MONAPAY_CLIENT_ID && env.MONAPAY_CLIENT_SECRET) {
+      return new MonaPay({
+        baseUrl,
+        clientId: env.MONAPAY_CLIENT_ID,
+        clientSecret: env.MONAPAY_CLIENT_SECRET,
+      });
+    }
+    if (env.MONAPAY_USERNAME && env.MONAPAY_PASSWORD) {
+      return new MonaPay({
+        baseUrl,
+        username: env.MONAPAY_USERNAME,
+        password: env.MONAPAY_PASSWORD,
+        clientSecret: env.MONAPAY_CLIENT_SECRET,
+      });
+    }
+    throw new TypeError('Thiếu MONAPAY_CLIENT_ID / MONAPAY_CLIENT_SECRET hoặc MONAPAY_USERNAME / MONAPAY_PASSWORD; nên dùng client_id/client_secret, tài khoản bật 2FA không login bằng mật khẩu được');
+  }
+
   async _login() {
     if (this._loginPromise) return this._loginPromise;
     this._loginPromise = (async () => {
-      const data = await this._send('POST', '/api/v1/client/login', {
-        body: { username: this.username, password: this.password },
+      const usingClientCredentials = Boolean(this.clientId && this.clientSecret);
+      const data = await this._send('POST', usingClientCredentials ? '/api/v1/oauth/token' : '/api/v1/client/login', {
+        body: usingClientCredentials
+          ? { grant_type: 'client_credentials', client_id: this.clientId, client_secret: this.clientSecret }
+          : { username: this.username, password: this.password },
         authenticated: false,
       });
-      if (!data?.access_token) throw new MonaPayError('Response đăng nhập không có access_token');
+      if (!data?.access_token) throw new MonaPayError('Response xác thực không có access_token');
       this._token = data.access_token;
+      const expiresIn = Number(data.expires_in || (usingClientCredentials ? 3600 : 86400));
+      this._tokenExpiresAt = Date.now() + Math.max(0, expiresIn - 60) * 1000;
       return this._token;
     })();
     try {
@@ -192,13 +244,21 @@ class MonaPay {
     }
   }
 
+  async _ensureToken() {
+    if (!this._token || Date.now() >= this._tokenExpiresAt) {
+      this._token = undefined;
+      await this._login();
+    }
+  }
+
   async _request(method, path, options = {}) {
-    if (!this._token) await this._login();
+    await this._ensureToken();
     try {
       return await this._send(method, path, { ...options, authenticated: true });
     } catch (error) {
       if (error instanceof MonaPayError && error.status === 401 && options.retry !== false) {
         this._token = undefined;
+        this._tokenExpiresAt = 0;
         await this._login();
         return this._send(method, path, { ...options, authenticated: true, retry: false });
       }

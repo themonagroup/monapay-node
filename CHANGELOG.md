@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 - 2026-09-03
+
+- Hoàn thiện luồng nối ngân hàng ACB bằng OTP 4 bước và truy vấn trạng thái đăng ký thông báo.
+
+## 0.2.0 - 2026-09-03
+
+- Thêm OAuth client credentials qua `clientId` + `clientSecret` và `MonaPay.fromEnv()`.
+- Cache token theo `expires_in`, làm mới sớm 60 giây; giữ tương thích username/password.
+
 ## 0.1.0 - 2026-08-29
 
 - Bản đầu tiên: auth tự động, VA, VietQR, giao dịch, webhook configs/logs và retry.

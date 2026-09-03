@@ -74,6 +74,36 @@ test('client dựng URL và header đúng, tự cache token', async () => {
   assert.equal(calls[2].init.headers['X-Client-Secret'], undefined);
 });
 
+test('client credentials dùng OAuth, cache token và gửi secret cho lệnh ghi', async () => {
+  const calls = [];
+  const fetch = async (url, init) => {
+    calls.push({ url, init });
+    if (url.endsWith('/api/v1/oauth/token')) {
+      return response({ success: true, data: { access_token: 'oauth-token', expires_in: 3600 } });
+    }
+    return response({ success: true, data: { username: 'shop' } });
+  };
+  const client = new MonaPay({
+    baseUrl: 'https://example.test', clientId: 'client-id', clientSecret: 'client-secret', fetch,
+  });
+  await client.webhooks.create({ name: 'Shop', webhook_url: 'https://shop.test/hook' });
+  await client.me();
+  assert.equal(calls.filter((call) => call.url.endsWith('/api/v1/oauth/token')).length, 1);
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    grant_type: 'client_credentials', client_id: 'client-id', client_secret: 'client-secret',
+  });
+  assert.equal(calls[1].init.headers['X-Client-Secret'], 'client-secret');
+});
+
+test('fromEnv ưu tiên client credentials', () => {
+  const client = MonaPay.fromEnv({
+    MONAPAY_CLIENT_ID: 'client-id', MONAPAY_CLIENT_SECRET: 'client-secret',
+    MONAPAY_USERNAME: 'legacy-user', MONAPAY_PASSWORD: 'legacy-pass',
+  });
+  assert.equal(client.clientId, 'client-id');
+  assert.equal(client.username, undefined);
+});
+
 test('client login lại một lần khi API trả 401', async () => {
   let loginCount = 0;
   let meCount = 0;
@@ -114,4 +144,33 @@ test('transactions.iterate đọc hết các trang', async () => {
   for await (const item of client.transactions.iterate({ virtualAccountNumber: 'MONA 01', limit: 2 })) items.push(item);
   assert.deepEqual(items.map((item) => item.id), ['tx-1', 'tx-2', 'tx-3']);
   assert.deepEqual(pages, [1, 2]);
+});
+
+test('va hỗ trợ đủ 5 method cho luồng nối ngân hàng bằng OTP', async () => {
+  const calls = [];
+  const fetch = async (url, init) => {
+    calls.push({ url, init });
+    if (url.endsWith('/api/v1/oauth/token')) {
+      return response({ success: true, data: { access_token: 'token', expires_in: 3600 } });
+    }
+    return response({ success: true, data: { ok: true } });
+  };
+  const client = new MonaPay({
+    baseUrl: 'https://example.test', clientId: 'client-id', clientSecret: 'client-secret', fetch,
+  });
+  await client.registerVirtualAccount({ account_number: 123456789, virtual_account_info: { virtual_account_prefix_code: 'LOC' } });
+  await client.verifyVirtualAccount('request/id', '123456');
+  await client.registerNotification('va/id');
+  await client.verifyNotification('notification/id', '654321');
+  await client.notificationDetail('va/id');
+
+  const apiCalls = calls.slice(1);
+  assert.equal(apiCalls[0].url, 'https://example.test/api/v1/acb/virtual-account/registration');
+  assert.equal(apiCalls[1].url, 'https://example.test/api/v1/acb/request%2Fid/virtual-account/verification');
+  assert.deepEqual(JSON.parse(apiCalls[1].init.body), { code: '123456' });
+  assert.equal(apiCalls[2].url, 'https://example.test/api/v1/acb/va%2Fid/notification/registration');
+  assert.deepEqual(JSON.parse(apiCalls[2].init.body), { receive_noti_realtime: true });
+  assert.equal(apiCalls[3].url, 'https://example.test/api/v1/acb/notification%2Fid/notification/verification');
+  assert.equal(apiCalls[4].url, 'https://example.test/api/v1/acb/va%2Fid/notification/details');
+  assert.equal(apiCalls[4].init.method, 'GET');
 });
